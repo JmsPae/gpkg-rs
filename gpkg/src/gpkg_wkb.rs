@@ -15,10 +15,10 @@ pub trait GeoPackageWKB: Sized {
 
 enum EnvelopeType {
     Missing,
-    XY,
-    XYM,
-    XYZ,
-    XYZM,
+    Xy,
+    Xym,
+    Xyz,
+    Xyzm,
 }
 
 struct GPKGGeomFlags {
@@ -37,10 +37,10 @@ impl GPKGGeomFlags {
         let little_endian = (b & 1) > 0;
         let envelope = match (b >> 1) & 0b111 {
             0 => EnvelopeType::Missing,
-            1 => EnvelopeType::XY,
-            2 => EnvelopeType::XYZ,
-            3 => EnvelopeType::XYM,
-            4 => EnvelopeType::XYZM,
+            1 => EnvelopeType::Xy,
+            2 => EnvelopeType::Xyz,
+            3 => EnvelopeType::Xym,
+            4 => EnvelopeType::Xyzm,
             _ => panic!("invalid envelope flag, don't know how to get geometry"),
         };
         GPKGGeomFlags {
@@ -55,10 +55,10 @@ impl GPKGGeomFlags {
         let mut flags = 0u8;
         let envelope_val = match self.envelope {
             EnvelopeType::Missing => 0,
-            EnvelopeType::XY => 1,
-            EnvelopeType::XYZ => 2,
-            EnvelopeType::XYM => 3,
-            EnvelopeType::XYZM => 4,
+            EnvelopeType::Xy => 1,
+            EnvelopeType::Xyz => 2,
+            EnvelopeType::Xym => 3,
+            EnvelopeType::Xyzm => 4,
         };
         flags |= (self.extended as u8) << 5;
         flags |= (self.empty_geom as u8) << 4;
@@ -135,16 +135,16 @@ impl<T: FullWKB> GeoPackageWKB for T {
         };
         let envelope_length: usize = match flags.envelope {
             EnvelopeType::Missing => 0,
-            EnvelopeType::XY => 32,
-            EnvelopeType::XYZ | EnvelopeType::XYM => 48,
-            EnvelopeType::XYZM => 64,
+            EnvelopeType::Xy => 32,
+            EnvelopeType::Xyz | EnvelopeType::Xym => 48,
+            EnvelopeType::Xyzm => 64,
         };
 
         let geom_start = 8 + envelope_length;
 
         let mut bytes_cursor = Cursor::new(&bytes[geom_start..]);
 
-        Ok(T::read_from_wkb(&mut bytes_cursor)?)
+        T::read_from_wkb(&mut bytes_cursor)
     }
 }
 

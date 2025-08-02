@@ -313,7 +313,7 @@ impl GeoPackage {
         {
             let mut stmt = conn.prepare("SELECT * FROM pragma_foreign_key_check()")?;
             let mut rows = stmt.query([])?;
-            if !(rows.next()?.is_none()) {
+            if rows.next()?.is_some() {
                 return Err(Error::ValidationError);
             }
         }
@@ -324,7 +324,6 @@ impl GeoPackage {
 
 #[cfg(test)]
 mod tests {
-    use geo_types::*;
     use std::fs;
     use tempfile::tempdir;
 

@@ -2,12 +2,11 @@
 use lazy_static::lazy_static;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::fmt::Arguments;
+use std::collections::HashMap;
 use std::ops::Deref;
-use std::{collections::HashMap, env::Args};
 use syn::{
     parse2, Attribute, DeriveInput, Expr, Field, GenericArgument, GenericParam, Generics, Ident,
-    Lit, LitInt, LitStr, MetaNameValue, Type, TypePath, TypeReference,
+    Lit, LitInt, Type, TypePath, TypeReference,
 };
 
 lazy_static! {
