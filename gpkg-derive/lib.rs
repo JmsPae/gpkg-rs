@@ -2,11 +2,12 @@
 use lazy_static::lazy_static;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::collections::HashMap;
+use std::fmt::Arguments;
 use std::ops::Deref;
+use std::{collections::HashMap, env::Args};
 use syn::{
-    parse2, Attribute, DeriveInput, Field, GenericArgument, GenericParam, Generics, Ident, Lit,
-    LitInt, Meta, MetaNameValue, Type, TypePath, TypeReference,
+    parse2, Attribute, DeriveInput, Expr, Field, GenericArgument, GenericParam, Generics, Ident,
+    Lit, LitInt, LitStr, MetaNameValue, Type, TypePath, TypeReference,
 };
 
 lazy_static! {
@@ -108,13 +109,7 @@ pub fn derive_gpkg(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 fn derive_gpkg_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStream {
     let ast = parse2::<DeriveInput>(input).unwrap();
 
-    let tbl_name_meta = get_meta_attr(&ast.attrs, "layer_name");
-    let tbl_name = tbl_name_meta.and_then(|meta| match meta {
-        Meta::NameValue(MetaNameValue {
-            lit: Lit::Str(ls), ..
-        }) => Some(ls.value()),
-        _ => None,
-    });
+    let tbl_name = get_meta_attr(&ast.attrs, "layer_name");
 
     // ge the name for our table name
     let name = &ast.ident;
@@ -131,16 +126,24 @@ fn derive_gpkg_inner(input: proc_macro2::TokenStream) -> proc_macro2::TokenStrea
     impl_model(&name.clone(), &fields, tbl_name, &ast.generics)
 }
 
-fn get_meta_attr<'a>(attrs: &Vec<Attribute>, name: &'a str) -> Option<Meta> {
-    let mut temp = attrs
-        .iter()
-        .filter_map(|attr| attr.parse_meta().ok())
-        .filter(|i| match i.path().get_ident() {
-            Some(i) => i.to_string() == name.to_owned(),
-            None => false,
-        })
-        .collect::<Vec<Meta>>();
-    temp.pop()
+fn get_meta_attr(attrs: &[Attribute], name: &str) -> Option<String> {
+    attrs.iter().find_map(|a| {
+        if a.path().is_ident(name) {
+            return match &a.meta {
+                syn::Meta::NameValue(meta_name_value) => Some(meta_name_value.value.clone()),
+                _ => None,
+            }
+            .and_then(|val| match val {
+                Expr::Lit(lit) => Some(lit.lit),
+                _ => None,
+            })
+            .and_then(|lit| match lit {
+                Lit::Str(lit_str) => Some(lit_str.value()),
+                _ => None,
+            });
+        }
+        None
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -173,19 +176,19 @@ fn get_reference_type_name(t: &TypeReference) -> String {
         syn::Type::Path(p) => {
             assert!(p.path.segments.len() == 1);
             match get_path_type_name(p).0.as_str() {
-                "str" => return String::from("str"),
+                "str" => String::from("str"),
                 _ => panic!("The only reference types supported are &str and &[u8]"),
             }
         }
         syn::Type::Slice(s) => match s.elem.deref() {
             Type::Path(p) => match get_path_type_name(p).0.as_str() {
-                "u8" => return String::from("buf"),
+                "u8" => String::from("buf"),
                 _ => panic!("The only reference types supported are &str and &[u8]"),
             },
             _ => panic!("The only reference types supported are &str and &[u8]"),
         },
         _ => panic!("The only reference types supported are &str and &[u8]"),
-    };
+    }
 }
 
 // return the field name and whether or not it's optional
@@ -296,7 +299,7 @@ fn impl_model(
                 }
                 // all geometry types are a blob inside sqlite
                 _ if geom_info.is_some() => quote!(BLOB),
-                _ => panic!("Don't know how to map to SQL type {}", type_name),
+                _ => panic!("Don't know how to map to SQL type {type_name}"),
             };
             FieldInfo {
                 name: field_name,
@@ -321,7 +324,7 @@ fn impl_model(
         layer_name_final, "attributes"
     );
 
-    if geom_fields.len() > 0 {
+    if !geom_fields.is_empty() {
         let geom_field = geom_fields[0];
         let geom_info = geom_field.geom_info.clone().unwrap();
         let geom_type_sql = geom_info.geom_type.clone();
@@ -388,8 +391,8 @@ fn impl_model(
                         fid INTEGER PRIMARY KEY,
                         #(#column_defs ),*
                     );
-                    #geom_column_ts
                     #contents_ts
+                    #geom_column_ts
                     COMMIT;
                 )
             }
@@ -437,28 +440,20 @@ fn impl_model(
 
 fn get_geom_field_info(field: &Field) -> Option<GeomInfo> {
     for attr in &field.attrs {
-        if let Some(ident) = attr.path.get_ident() {
-            if ident.to_string() == "geom_field" {
-                let geom_type_name =
-                    get_meta_attr(&field.attrs, "geom_field").and_then(|meta| match meta {
-                        Meta::List(l) => l.nested.first().and_then(|n| match n {
-                            syn::NestedMeta::Lit(Lit::Str(ls)) => Some(ls.value()),
-                            _ => panic!("You must specify a geometry type when using the geom_field attribute"),
-                        }),
-                        _ => panic!("You must specify a geometry type when using the geom_field attribute"),
+        if let Some(ident) = attr.path().get_ident() {
+            if *ident == "geom_field" {
+                let name = get_meta_attr(&field.attrs, "geom_field")
+                    .expect("You must specify a geometry type when using the geom_field attribute");
+                let upper_name = name.to_uppercase();
+                if let Some((m, z)) = GEO_TYPES.get(upper_name.as_str()) {
+                    return Some(GeomInfo {
+                        geom_type: upper_name,
+                        srs_id: 4326,
+                        m: *m,
+                        z: *z,
                     });
-                if let Some(name) = geom_type_name {
-                    let upper_name = name.to_uppercase();
-                    if let Some((m, z)) = GEO_TYPES.get((&upper_name).as_str()) {
-                        return Some(GeomInfo {
-                            geom_type: upper_name,
-                            srs_id: 4326,
-                            m: *m,
-                            z: *z,
-                        });
-                    } else {
-                        panic!("{} is not a supported geometry type", name);
-                    }
+                } else {
+                    panic!("{name} is not a supported geometry type");
                 }
             }
         }
@@ -480,10 +475,10 @@ mod test {
                 height: f64,
                 string_ref: Option<String>,
                 buf_ref: &'a [u8],
-                #[geom_field("LineStringZ")]
+                #[geom_field = "LineStringZ"]
                 geom: GPKGLineStringZ,
             }
         );
-        println!("{}", derive_gpkg_inner(tstream.into()));
+        println!("{}", derive_gpkg_inner(tstream));
     }
 }

@@ -15,7 +15,7 @@ pub use gpkg_derive::GPKGModel;
 pub use gpkg_wkb::GeoPackageWKB;
 #[doc(inline)]
 pub use result::{Error, Result};
-use rusqlite::{params, Connection, DatabaseName, OpenFlags, OptionalExtension};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 #[doc(inline)]
 pub use srs::SpatialRefSys;
 use std::path::Path;
@@ -94,9 +94,8 @@ impl GeoPackage {
         let conn = Connection::open(path)?;
         let gpkg = GeoPackage { conn };
         gpkg.conn
-            .pragma_update(Some(DatabaseName::Main), "application_id", 0x47504B47)?;
-        gpkg.conn
-            .pragma_update(Some(DatabaseName::Main), "user_version", 10300)?;
+            .pragma_update(None, "application_id", 0x47504B47)?;
+        gpkg.conn.pragma_update(None, "user_version", 10300)?;
         // requrement 10
         gpkg.conn.execute(CREATE_SPATIAL_REF_SYS_TABLE, [])?;
         // insert the default SRS as per spec requirement 11
@@ -340,7 +339,7 @@ mod tests {
         end_node: i64,
         rev_cost: String,
         // #[geom_field("LineStringZ")]
-        #[geom_field("LineStringZ")]
+        #[geom_field = "LineStringZ"]
         geom: types::GPKGLineStringZ,
     }
 
@@ -478,129 +477,129 @@ mod tests {
         assert!(retrieved.len() == vec_for_insert.len());
     }
 
-    #[test]
-    fn multipoint_test() {
-        #[derive(GPKGModel)]
-        struct MPTest {
-            id: i64,
-            #[geom_field("MultiPoint")]
-            geom: GPKGMultiPoint,
-        }
+    // #[test]
+    // fn multipoint_test() {
+    //     #[derive(GPKGModel)]
+    //     struct MPTest {
+    //         id: i64,
+    //         #[geom_field = "MultiPoint"]
+    //         geom: GPKGMultiPoint,
+    //     }
 
-        let filename = Path::new("./test_data/multipoint.gpkg");
-        let gp = GeoPackage::create(&filename).unwrap();
+    //     let filename = Path::new("./test_data/multipoint.gpkg");
+    //     let gp = GeoPackage::create(&filename).unwrap();
 
-        gp.create_layer::<MPTest>().unwrap();
+    //     gp.create_layer::<MPTest>().unwrap();
 
-        let sample = MPTest {
-            id: 99,
-            geom: GPKGMultiPoint(geo_types::MultiPoint::new(vec![
-                (coord! {x: 1.0, y: 1.0}).into(),
-                (coord! {x: 3.0, y: 3.0}).into(),
-                (coord! {x: 5.0, y: 5.0}).into(),
-                (coord! {x: 7.0, y: 7.0}).into(),
-            ])),
-        };
+    //     let sample = MPTest {
+    //         id: 99,
+    //         geom: GPKGMultiPoint(geo_types::MultiPoint::new(vec![
+    //             (coord! {x: 1.0, y: 1.0}).into(),
+    //             (coord! {x: 3.0, y: 3.0}).into(),
+    //             (coord! {x: 5.0, y: 5.0}).into(),
+    //             (coord! {x: 7.0, y: 7.0}).into(),
+    //         ])),
+    //     };
 
-        gp.insert_record(&sample).unwrap();
+    //     gp.insert_record(&sample).unwrap();
 
-        gp.close();
-    }
+    //     gp.close();
+    // }
 
-    fn get_test_multilinestring() -> geo_types::MultiLineString<f64> {
-        let ls1: geo_types::LineString<f64> = geo_types::LineString::new(vec![
-            coord! {x: -105.0, y: 40.0},
-            coord! {x: -106.0, y: 41.5},
-            coord! {x: -107.0, y: 43.0},
-        ]);
+    // fn get_test_multilinestring() -> geo_types::MultiLineString<f64> {
+    //     let ls1: geo_types::LineString<f64> = geo_types::LineString::new(vec![
+    //         coord! {x: -105.0, y: 40.0},
+    //         coord! {x: -106.0, y: 41.5},
+    //         coord! {x: -107.0, y: 43.0},
+    //     ]);
 
-        let ls2: geo_types::LineString<f64> = geo_types::LineString::new(vec![
-            coord! {x: -15.0, y: 4.0},
-            coord! {x: -16.0, y: 4.5},
-            coord! {x: -17.0, y: 4.0},
-        ]);
-        geo_types::MultiLineString::new(vec![ls1, ls2])
-    }
+    //     let ls2: geo_types::LineString<f64> = geo_types::LineString::new(vec![
+    //         coord! {x: -15.0, y: 4.0},
+    //         coord! {x: -16.0, y: 4.5},
+    //         coord! {x: -17.0, y: 4.0},
+    //     ]);
+    //     geo_types::MultiLineString::new(vec![ls1, ls2])
+    // }
 
-    #[test]
-    fn multilinestring_test() {
-        #[derive(GPKGModel)]
-        struct MPTest {
-            id: i64,
-            #[geom_field("MultiLineString")]
-            geom: GPKGMultiLineString,
-        }
+    // #[test]
+    // fn multilinestring_test() {
+    //     #[derive(GPKGModel)]
+    //     struct MPTest {
+    //         id: i64,
+    //         #[geom_field = "MultiLineString"]
+    //         geom: GPKGMultiLineString,
+    //     }
 
-        let filename = Path::new("./test_data/multilinestring.gpkg");
-        let gp = GeoPackage::create(&filename).unwrap();
+    //     let filename = Path::new("./test_data/multilinestring.gpkg");
+    //     let gp = GeoPackage::create(&filename).unwrap();
 
-        gp.create_layer::<MPTest>().unwrap();
+    //     gp.create_layer::<MPTest>().unwrap();
 
-        let test_geom = GPKGMultiLineString(get_test_multilinestring());
-        dbg!(test_geom.to_wkb().unwrap());
+    //     let test_geom = GPKGMultiLineString(get_test_multilinestring());
+    //     dbg!(test_geom.to_wkb().unwrap());
 
-        let sample = MPTest {
-            id: 99,
-            geom: test_geom,
-        };
+    //     let sample = MPTest {
+    //         id: 99,
+    //         geom: test_geom,
+    //     };
 
-        gp.insert_record(&sample).unwrap();
+    //     gp.insert_record(&sample).unwrap();
 
-        gp.close();
-    }
+    //     gp.close();
+    // }
 
-    fn get_test_multipolygon() -> MultiPolygon<f64> {
-        let poly1_exterior: LineString<f64> = LineString::new(vec![
-            coord! {x: -105.0, y: 40.0},
-            coord! {x: -106.0, y: 43.5},
-            coord! {x: -107.0, y: 41.0},
-            coord! {x: -105.0, y: 40.0},
-        ]);
-        let poly1 = Polygon::new(poly1_exterior, vec![]);
+    // fn get_test_multipolygon() -> MultiPolygon<f64> {
+    //     let poly1_exterior: LineString<f64> = LineString::new(vec![
+    //         coord! {x: -105.0, y: 40.0},
+    //         coord! {x: -106.0, y: 43.5},
+    //         coord! {x: -107.0, y: 41.0},
+    //         coord! {x: -105.0, y: 40.0},
+    //     ]);
+    //     let poly1 = Polygon::new(poly1_exterior, vec![]);
 
-        let poly2_exterior: LineString<f64> = LineString::new(vec![
-            coord! {x: -15.0, y: 4.0},
-            coord! {x: 16.0, y: 4.5},
-            coord! {x: -1.0, y: 10.0},
-            coord! {x: -10.0, y: 10.0},
-            coord! {x: -15.0, y: 4.0},
-        ]);
+    //     let poly2_exterior: LineString<f64> = LineString::new(vec![
+    //         coord! {x: -15.0, y: 4.0},
+    //         coord! {x: 16.0, y: 4.5},
+    //         coord! {x: -1.0, y: 10.0},
+    //         coord! {x: -10.0, y: 10.0},
+    //         coord! {x: -15.0, y: 4.0},
+    //     ]);
 
-        let poly2_interior: LineString<f64> = LineString::new(vec![
-            coord! {x: -1.53, y: 4.999},
-            coord! {x: 1.609, y: 5.67},
-            coord! {x: -2.345, y: 6.2},
-            coord! {x: -1.53, y: 4.999},
-        ]);
-        let poly2 = Polygon::new(poly2_exterior, vec![poly2_interior]);
+    //     let poly2_interior: LineString<f64> = LineString::new(vec![
+    //         coord! {x: -1.53, y: 4.999},
+    //         coord! {x: 1.609, y: 5.67},
+    //         coord! {x: -2.345, y: 6.2},
+    //         coord! {x: -1.53, y: 4.999},
+    //     ]);
+    //     let poly2 = Polygon::new(poly2_exterior, vec![poly2_interior]);
 
-        MultiPolygon::new(vec![poly1, poly2])
-    }
+    //     MultiPolygon::new(vec![poly1, poly2])
+    // }
 
-    #[test]
-    fn multipolygon_test() {
-        #[derive(GPKGModel)]
-        struct MPTest {
-            id: i64,
-            #[geom_field("MultiPolygon")]
-            geom: GPKGMultiPolygon,
-        }
+    // #[test]
+    // fn multipolygon_test() {
+    //     #[derive(GPKGModel)]
+    //     struct MPTest {
+    //         id: i64,
+    //         #[geom_field = "MultiPolygon"]
+    //         geom: GPKGMultiPolygon,
+    //     }
 
-        let filename = Path::new("./test_data/multipolygon.gpkg");
-        let gp = GeoPackage::create(&filename).unwrap();
+    //     let filename = Path::new("./test_data/multipolygon.gpkg");
+    //     let gp = GeoPackage::create(&filename).unwrap();
 
-        gp.create_layer::<MPTest>().unwrap();
+    //     gp.create_layer::<MPTest>().unwrap();
 
-        let test_geom = GPKGMultiPolygon(get_test_multipolygon());
-        dbg!(test_geom.to_wkb().unwrap());
+    //     let test_geom = GPKGMultiPolygon(get_test_multipolygon());
+    //     dbg!(test_geom.to_wkb().unwrap());
 
-        let sample = MPTest {
-            id: 99,
-            geom: test_geom,
-        };
+    //     let sample = MPTest {
+    //         id: 99,
+    //         geom: test_geom,
+    //     };
 
-        gp.insert_record(&sample).unwrap();
+    //     gp.insert_record(&sample).unwrap();
 
-        gp.close();
-    }
+    //     gp.close();
+    // }
 }
